@@ -1649,12 +1649,12 @@ class TLSConnection(TLSRecordLayer):
                            keyExchange):
         """Perform the client side of key exchange"""
         # if server chose cipher suite with authentication, get the certificate
-        if cipherSuite in CipherSuite.certAllSuites or \
-                cipherSuite in CipherSuite.ecdheEcdsaSuites or \
-                cipherSuite in CipherSuite.dheDsaSuites:
-            if hasattr(self, 'get_server_certificate'):
-                serverCertificate = self.get_server_certificate()
-            else:
+        if hasattr(self, 'get_server_certificate'):
+            serverCertificate = self.get_server_certificate(certificateType)
+        else:
+            if cipherSuite in CipherSuite.certAllSuites or \
+                    cipherSuite in CipherSuite.ecdheEcdsaSuites or \
+                    cipherSuite in CipherSuite.dheDsaSuites:
                 for result in self._getMsg(ContentType.handshake,
                                         HandshakeType.certificate,
                                         certificateType):
@@ -1662,12 +1662,12 @@ class TLSConnection(TLSRecordLayer):
                         yield result
                     else: break
                 serverCertificate = result
-        else:
-            serverCertificate = None
+            else:
+                serverCertificate = None
         # if server chose RSA key exchange, we need to skip SKE message
         if cipherSuite not in CipherSuite.certSuites:
             if hasattr(self, 'get_server_key_exchange'):
-                serverCertificate = self.get_server_key_exchange()
+                serverKeyExchange = self.get_server_key_exchange()
             else:
                 for result in self._getMsg(ContentType.handshake,
                                         HandshakeType.server_key_exchange,
@@ -1717,6 +1717,7 @@ class TLSConnection(TLSRecordLayer):
                 cipherSuite in CipherSuite.ecdheEcdsaSuites or \
                 cipherSuite in CipherSuite.dheDsaSuites:
             # get the certificate
+            print('z'*20, serverCertificate)
             for result in self._clientGetKeyFromChain(serverCertificate,
                                                       settings,
                                                       tackExt):

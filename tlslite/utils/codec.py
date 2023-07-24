@@ -343,7 +343,9 @@ class Parser(object):
 
         :rtype: bytearray
         """
+        print('lengthLength: ', lengthLength)
         lengthBytes = self.get(lengthLength)
+        print('lengthBytes: ', lengthBytes)
         return self.getFixBytes(lengthBytes)
 
     def getFixList(self, length, lengthList):
