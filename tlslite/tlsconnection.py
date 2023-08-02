@@ -18,6 +18,7 @@ MAIN CLASS FOR TLS LITE (START HERE!).
 from __future__ import division
 import time
 import socket
+import logging
 from itertools import chain
 from .utils.compat import formatExceptionTrace
 from .tlsrecordlayer import TLSRecordLayer
@@ -624,6 +625,15 @@ class TLSConnection(TLSRecordLayer):
 
         # we'll send few messages here, send them in single TCP packet
         self.sock.buffer_writes = True
+        logging.debug(f"setting: {settings}")
+        logging.debug(f"cipherSuite: {cipherSuite}")
+        logging.debug(f"clientCertChain: {clientCertChain}")
+        logging.debug(f"client privateKey: {privateKey}")
+        logging.debug(f"serverHello.certificate_type: {serverHello.certificate_type}")
+        logging.debug(f"serverHello.tackExt: {serverHello.tackExt}")
+        logging.debug(f"clientHello.random: {clientHello.random}")
+        logging.debug(f"serverHello.random: {serverHello.random}")
+        
         for result in self._clientKeyExchange(settings, cipherSuite,
                                               clientCertChain,
                                               privateKey,
@@ -1667,7 +1677,7 @@ class TLSConnection(TLSRecordLayer):
         # if server chose RSA key exchange, we need to skip SKE message
         if cipherSuite not in CipherSuite.certSuites:
             if hasattr(self, 'get_server_key_exchange'):
-                serverKeyExchange = self.get_server_key_exchange()
+                serverKeyExchange = self.get_server_key_exchange(cipherSuite)
             else:
                 for result in self._getMsg(ContentType.handshake,
                                         HandshakeType.server_key_exchange,
