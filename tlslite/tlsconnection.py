@@ -1743,20 +1743,25 @@ class TLSConnection(TLSRecordLayer):
                 valid_sig_algs = \
                     self._sigHashesToList(settings,
                                           certList=serverCertChain)
-                try:
-                    KeyExchange.verifyServerKeyExchange(serverKeyExchange,
+                # try:
+                logging.debug(f"serverKeyExchange: {serverKeyExchange}")
+                logging.debug(f"publicKey: {publicKey}")
+                logging.debug(f"clientRandom: {clientRandom}")
+                logging.debug(f"serverRandom: {serverRandom}")
+                logging.debug(f"valid_sig_algs: {valid_sig_algs}")
+                KeyExchange.verifyServerKeyExchange(serverKeyExchange,
                                                         publicKey,
                                                         clientRandom,
                                                         serverRandom,
                                                         valid_sig_algs)
-                except TLSIllegalParameterException:
-                    for result in self._sendError(AlertDescription.\
-                                                  illegal_parameter):
-                        yield result
-                except TLSDecryptionFailed:
-                    for result in self._sendError(\
-                            AlertDescription.decrypt_error):
-                        yield result
+                # except TLSIllegalParameterException:
+                #     for result in self._sendError(AlertDescription.\
+                #                                   illegal_parameter):
+                #         yield result
+                # except TLSDecryptionFailed:
+                #     for result in self._sendError(\
+                #             AlertDescription.decrypt_error):
+                #         yield result
 
         if serverKeyExchange:
             # store key exchange metadata for user applications

@@ -9,7 +9,7 @@
 # See the LICENSE file for legal information regarding use of this file.
 
 """Classes representing TLS messages."""
-
+import logging
 from .utils.compat import *
 from .utils.cryptomath import *
 from .errors import *
@@ -1556,10 +1556,15 @@ class ServerKeyExchange(HandshakeMsg):
             writer.addVarSeq(numberToByteArray(self.dh_Ys, self.dh_Ys_len),
                              1, 2)
         elif self.cipherSuite in CipherSuite.ecdhAllSuites:
+            logging.debug(f"curve_type: {self.curve_type}")
             writer.add(self.curve_type, 1)
             assert self.curve_type == 3
-            writer.add(self.named_curve, 2)
-            writer.addVarSeq(self.ecdh_Ys, 1, 1)
+            if type(self.named_curve) == bytes:
+                writer.addVarSeq(self.named_curve, 2, 2)
+            else:
+                writer.add(self.named_curve, 2)
+            if self.ecdh_Ys:
+                writer.addVarSeq(self.ecdh_Ys, 1, 1)
         else:
             assert(False)
         return writer.bytes

@@ -5,6 +5,7 @@
 """Handling of cryptographic operations for key exchange"""
 
 import ecdsa
+import logging
 from .mathtls import goodGroupParameters, makeK, makeU, makeX, \
         paramStrength, RFC7919_GROUPS, calc_key
 from .errors import TLSInsufficientSecurity, TLSUnknownPSKIdentity, \
@@ -261,7 +262,7 @@ class KeyExchange(object):
 
         hashBytes = serverKeyExchange.hash(clientRandom, serverRandom)
 
-        if not publicKey.verify(serverKeyExchange.signature, hashBytes):
+        if not publicKey.verify(serverkjlkKeyExchange.signature, hashBytes):
             raise TLSDecryptionFailed("Server Key Exchange signature "
                                       "invalid")
 
@@ -269,6 +270,9 @@ class KeyExchange(object):
     def _tls12_verify_SKE(serverKeyExchange, publicKey, clientRandom,
                           serverRandom, validSigAlgs):
         """Verify TLSv1.2 version of SKE."""
+        logging.debug(f"[verifyServerKeyExchange] hashAlg: {serverKeyExchange.hashAlg}")
+        logging.debug(f"[verifyServerKeyExchange] signAlg: {serverKeyExchange.signAlg}")
+        logging.debug(f"validSigAlgs: {validSigAlgs}")
         if (serverKeyExchange.hashAlg, serverKeyExchange.signAlg) not in \
                 validSigAlgs:
             raise TLSIllegalParameterException("Server selected "
@@ -322,6 +326,11 @@ class KeyExchange(object):
         if not sigBytes:
             raise TLSIllegalParameterException("Empty signature")
 
+        logging.debug(f"sigBytes {sigBytes}")
+        logging.debug(f"hashBytes {hashBytes}")
+        logging.debug(f"padType {padType}")
+        logging.debug(f"hashName {hashName}")
+        logging.debug(f"saltLen {saltLen}")
         if not publicKey.verify(sigBytes, hashBytes,
                                 padding=padType,
                                 hashAlg=hashName,
@@ -339,7 +348,8 @@ class KeyExchange(object):
         if serverKeyExchange.version < (3, 3):
             hashBytes = serverKeyExchange.hash(clientRandom, serverRandom)
             sigBytes = serverKeyExchange.signature
-
+            logging.debug(f"[verifyServerKeyExchange] hashBytes: {hashBytes}")
+            logging.debug(f"[verifyServerKeyExchange] sigBytes: {sigBytes}")
             if not sigBytes:
                 raise TLSIllegalParameterException("Empty signature")
 
