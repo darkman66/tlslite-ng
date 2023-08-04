@@ -6,23 +6,40 @@
 
 import ecdsa
 import logging
-from .mathtls import goodGroupParameters, makeK, makeU, makeX, \
-        paramStrength, RFC7919_GROUPS, calc_key
-from .errors import TLSInsufficientSecurity, TLSUnknownPSKIdentity, \
-        TLSIllegalParameterException, TLSDecryptionFailed, TLSInternalError, \
-        TLSDecodeError
+from .mathtls import goodGroupParameters, makeK, makeU, makeX, paramStrength, RFC7919_GROUPS, calc_key
+from .errors import (
+    TLSInsufficientSecurity,
+    TLSUnknownPSKIdentity,
+    TLSIllegalParameterException,
+    TLSDecryptionFailed,
+    TLSInternalError,
+    TLSDecodeError,
+)
 from .messages import ServerKeyExchange, ClientKeyExchange, CertificateVerify
-from .constants import SignatureAlgorithm, HashAlgorithm, CipherSuite, \
-        ExtensionType, GroupName, ECCurveType, SignatureScheme
-from .utils.ecc import decodeX962Point, encodeX962Point, getCurveByName, \
-        getPointByteSize
+from .constants import (
+    SignatureAlgorithm,
+    HashAlgorithm,
+    CipherSuite,
+    ExtensionType,
+    GroupName,
+    ECCurveType,
+    SignatureScheme,
+)
+from .utils.ecc import decodeX962Point, encodeX962Point, getCurveByName, getPointByteSize
 from .utils.rsakey import RSAKey
-from .utils.cryptomath import bytesToNumber, getRandomBytes, powMod, \
-        numBits, numberToByteArray, divceil, numBytes, secureHash
+from .utils.cryptomath import (
+    bytesToNumber,
+    getRandomBytes,
+    powMod,
+    numBits,
+    numberToByteArray,
+    divceil,
+    numBytes,
+    secureHash,
+)
 from .utils.lists import getFirstMatching
 from .utils import tlshashlib as hashlib
-from .utils.x25519 import x25519, x448, X25519_G, X448_G, X25519_ORDER_SIZE, \
-        X448_ORDER_SIZE
+from .utils.x25519 import x25519, x448, X25519_G, X448_G, X25519_ORDER_SIZE, X448_ORDER_SIZE
 from .utils.compat import int_types
 from .utils.codec import DecodeError
 
@@ -58,8 +75,7 @@ class KeyExchange(object):
         Returns a ClientKeyExchange for the second flight from client in the
         handshake.
         """
-        return ClientKeyExchange(self.cipherSuite,
-                                 self.serverHello.server_version)
+        return ClientKeyExchange(self.cipherSuite, self.serverHello.server_version)
 
     def processClientKeyExchange(self, clientKeyExchange):
         """
@@ -70,93 +86,71 @@ class KeyExchange(object):
         """
         raise NotImplementedError()
 
-    def processServerKeyExchange(self, srvPublicKey,
-                                 serverKeyExchange):
+    def processServerKeyExchange(self, srvPublicKey, serverKeyExchange):
         """Process the server KEX and return premaster secret"""
         raise NotImplementedError()
 
     def _tls12_sign_ecdsa_SKE(self, serverKeyExchange, sigHash=None):
         try:
-            serverKeyExchange.hashAlg, serverKeyExchange.signAlg = \
-                    getattr(SignatureScheme, sigHash)
+            serverKeyExchange.hashAlg, serverKeyExchange.signAlg = getattr(SignatureScheme, sigHash)
             hashName = SignatureScheme.getHash(sigHash)
         except AttributeError:
             serverKeyExchange.hashAlg = getattr(HashAlgorithm, sigHash)
             serverKeyExchange.signAlg = SignatureAlgorithm.ecdsa
             hashName = sigHash
 
-        hash_bytes = serverKeyExchange.hash(self.clientHello.random,
-                                            self.serverHello.random)
+        hash_bytes = serverKeyExchange.hash(self.clientHello.random, self.serverHello.random)
 
-        hash_bytes = hash_bytes[:self.privateKey.private_key.curve.baselen]
+        hash_bytes = hash_bytes[: self.privateKey.private_key.curve.baselen]
 
-        serverKeyExchange.signature = \
-            self.privateKey.sign(hash_bytes, hashAlg=hashName)
+        serverKeyExchange.signature = self.privateKey.sign(hash_bytes, hashAlg=hashName)
 
         if not serverKeyExchange.signature:
             raise TLSInternalError("Empty signature")
 
-        if not self.privateKey.verify(serverKeyExchange.signature,
-                                             hash_bytes,
-                                             ecdsa.util.sigdecode_der):
+        if not self.privateKey.verify(serverKeyExchange.signature, hash_bytes, ecdsa.util.sigdecode_der):
             raise TLSInternalError("signature validation failure")
 
     def _tls12_sign_dsa_SKE(self, serverKeyExchange, sigHash=None):
         """Sign a TLSv1.2 SKE message."""
         try:
-            serverKeyExchange.hashAlg, serverKeyExchange.signAlg = \
-                getattr(SignatureScheme, sigHash)
+            serverKeyExchange.hashAlg, serverKeyExchange.signAlg = getattr(SignatureScheme, sigHash)
 
         except AttributeError:
             serverKeyExchange.signAlg = SignatureAlgorithm.dsa
             serverKeyExchange.hashAlg = getattr(HashAlgorithm, sigHash)
 
-        hashBytes = serverKeyExchange.hash(self.clientHello.random,
-                                           self.serverHello.random)
+        hashBytes = serverKeyExchange.hash(self.clientHello.random, self.serverHello.random)
 
-        serverKeyExchange.signature = \
-            self.privateKey.sign(hashBytes)
+        serverKeyExchange.signature = self.privateKey.sign(hashBytes)
 
         if not serverKeyExchange.signature:
             raise TLSInternalError("Empty signature")
 
-        if not self.privateKey.verify(serverKeyExchange.signature,
-                                      hashBytes):
+        if not self.privateKey.verify(serverKeyExchange.signature, hashBytes):
             raise TLSInternalError("Server Key Exchange signature invalid")
 
     def _tls12_sign_eddsa_ske(self, server_key_exchange, sig_hash):
         """Sign a TLSv1.2 SKE message."""
-        server_key_exchange.hashAlg, server_key_exchange.signAlg = \
-                getattr(SignatureScheme, sig_hash)
+        server_key_exchange.hashAlg, server_key_exchange.signAlg = getattr(SignatureScheme, sig_hash)
         pad_type = None
         hash_name = None
         salt_len = None
 
-        hash_bytes = server_key_exchange.hash(self.clientHello.random,
-                                              self.serverHello.random)
+        hash_bytes = server_key_exchange.hash(self.clientHello.random, self.serverHello.random)
 
-        server_key_exchange.signature = \
-            self.privateKey.hashAndSign(hash_bytes,
-                                        pad_type,
-                                        hash_name,
-                                        salt_len)
+        server_key_exchange.signature = self.privateKey.hashAndSign(hash_bytes, pad_type, hash_name, salt_len)
 
         if not server_key_exchange.signature:
             raise TLSInternalError("Empty signature")
 
-        if not self.privateKey.hashAndVerify(
-                server_key_exchange.signature,
-                hash_bytes,
-                pad_type,
-                hash_name,
-                salt_len):
+        if not self.privateKey.hashAndVerify(server_key_exchange.signature, hash_bytes, pad_type, hash_name, salt_len):
             raise TLSInternalError("Server Key Exchange signature invalid")
 
     def _tls12_signSKE(self, serverKeyExchange, sigHash=None):
         """Sign a TLSv1.2 SKE message."""
         try:
-            serverKeyExchange.hashAlg, serverKeyExchange.signAlg = \
-                    getattr(SignatureScheme, sigHash)
+            serverKeyExchange.hashAlg, serverKeyExchange.signAlg = getattr(SignatureScheme, sigHash)
             keyType = SignatureScheme.getKeyType(sigHash)
             padType = SignatureScheme.getPadding(sigHash)
             hashName = SignatureScheme.getHash(sigHash)
@@ -164,30 +158,25 @@ class KeyExchange(object):
         except AttributeError:
             serverKeyExchange.signAlg = SignatureAlgorithm.rsa
             serverKeyExchange.hashAlg = getattr(HashAlgorithm, sigHash)
-            keyType = 'rsa'
-            padType = 'pkcs1'
+            keyType = "rsa"
+            padType = "pkcs1"
             hashName = sigHash
             saltLen = 0
 
-        assert keyType == 'rsa'
+        assert keyType == "rsa"
 
-        hashBytes = serverKeyExchange.hash(self.clientHello.random,
-                                           self.serverHello.random)
+        hashBytes = serverKeyExchange.hash(self.clientHello.random, self.serverHello.random)
 
-        serverKeyExchange.signature = \
-            self.privateKey.sign(hashBytes,
-                                 padding=padType,
-                                 hashAlg=hashName,
-                                 saltLen=saltLen)
+        serverKeyExchange.signature = self.privateKey.sign(
+            hashBytes, padding=padType, hashAlg=hashName, saltLen=saltLen
+        )
 
         if not serverKeyExchange.signature:
             raise TLSInternalError("Empty signature")
 
-        if not self.privateKey.verify(serverKeyExchange.signature,
-                                      hashBytes,
-                                      padding=padType,
-                                      hashAlg=hashName,
-                                      saltLen=saltLen):
+        if not self.privateKey.verify(
+            serverKeyExchange.signature, hashBytes, padding=padType, hashAlg=hashName, saltLen=saltLen
+        ):
             raise TLSInternalError("Server Key Exchange signature invalid")
 
     def signServerKeyExchange(self, serverKeyExchange, sigHash=None):
@@ -202,16 +191,14 @@ class KeyExchange(object):
                 serverKeyExchange.signAlg = SignatureAlgorithm.ecdsa
             if self.privateKey.key_type == "dsa":
                 serverKeyExchange.signAlg = SignatureAlgorithm.dsa
-            hashBytes = serverKeyExchange.hash(self.clientHello.random,
-                                               self.serverHello.random)
+            hashBytes = serverKeyExchange.hash(self.clientHello.random, self.serverHello.random)
 
             serverKeyExchange.signature = self.privateKey.sign(hashBytes)
 
             if not serverKeyExchange.signature:
                 raise TLSInternalError("Empty signature")
 
-            if not self.privateKey.verify(serverKeyExchange.signature,
-                                          hashBytes):
+            if not self.privateKey.verify(serverKeyExchange.signature, hashBytes):
                 raise TLSInternalError("Server Key Exchange signature invalid")
         else:
             if self.privateKey.key_type == "ecdsa":
@@ -224,26 +211,20 @@ class KeyExchange(object):
                 self._tls12_signSKE(serverKeyExchange, sigHash)
 
     @staticmethod
-    def _tls12_verify_ecdsa_SKE(serverKeyExchange, publicKey, clientRandom,
-                                serverRandom, validSigAlgs):
+    def _tls12_verify_ecdsa_SKE(serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs):
         hashName = HashAlgorithm.toRepr(serverKeyExchange.hashAlg)
         if not hashName:
             raise TLSIllegalParameterException("Unknown hash algorithm")
 
         hashBytes = serverKeyExchange.hash(clientRandom, serverRandom)
 
-        hashBytes = hashBytes[:publicKey.public_key.curve.baselen]
+        hashBytes = hashBytes[: publicKey.public_key.curve.baselen]
 
-        if not publicKey.verify(serverKeyExchange.signature, hashBytes,
-                                padding=None,
-                                hashAlg=hashName,
-                                saltLen=None):
-            raise TLSDecryptionFailed("Server Key Exchange signature "
-                                      "invalid")
+        if not publicKey.verify(serverKeyExchange.signature, hashBytes, padding=None, hashAlg=hashName, saltLen=None):
+            raise TLSDecryptionFailed("Server Key Exchange signature " "invalid")
 
     @staticmethod
-    def _tls12_verify_eddsa_ske(server_key_exchange, public_key, client_random,
-                                server_random, valid_sig_algs):
+    def _tls12_verify_eddsa_ske(server_key_exchange, public_key, client_random, server_random, valid_sig_algs):
         """Verify SeverKeyExchange messages with EdDSA signatures."""
         del valid_sig_algs
         sig_bytes = server_key_exchange.signature
@@ -252,55 +233,40 @@ class KeyExchange(object):
 
         hash_bytes = server_key_exchange.hash(client_random, server_random)
 
-        if not public_key.hashAndVerify(sig_bytes,
-                                        hash_bytes):
+        if not public_key.hashAndVerify(sig_bytes, hash_bytes):
             raise TLSDecryptionFailed("Server Key Exchange signature invalid")
 
     @staticmethod
-    def _tls12_verify_dsa_SKE(serverKeyExchange, publicKey, clientRandom,
-                              serverRandom, validSigAlgs):
+    def _tls12_verify_dsa_SKE(serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs):
 
         hashBytes = serverKeyExchange.hash(clientRandom, serverRandom)
 
         if not publicKey.verify(serverkjlkKeyExchange.signature, hashBytes):
-            raise TLSDecryptionFailed("Server Key Exchange signature "
-                                      "invalid")
+            raise TLSDecryptionFailed("Server Key Exchange signature " "invalid")
 
     @staticmethod
-    def _tls12_verify_SKE(serverKeyExchange, publicKey, clientRandom,
-                          serverRandom, validSigAlgs):
+    def _tls12_verify_SKE(serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs):
         """Verify TLSv1.2 version of SKE."""
         logging.debug(f"[verifyServerKeyExchange] hashAlg: {serverKeyExchange.hashAlg}")
         logging.debug(f"[verifyServerKeyExchange] signAlg: {serverKeyExchange.signAlg}")
         logging.debug(f"validSigAlgs: {validSigAlgs}")
-        if (serverKeyExchange.hashAlg, serverKeyExchange.signAlg) not in \
-                validSigAlgs:
-            raise TLSIllegalParameterException("Server selected "
-                                               "invalid signature "
-                                               "algorithm")
-        if (serverKeyExchange.hashAlg, serverKeyExchange.signAlg) in (
-                SignatureScheme.ed25519, SignatureScheme.ed448):
-            return KeyExchange._tls12_verify_eddsa_ske(serverKeyExchange,
-                                                       publicKey,
-                                                       clientRandom,
-                                                       serverRandom,
-                                                       validSigAlgs)
+        if (serverKeyExchange.hashAlg, serverKeyExchange.signAlg) not in validSigAlgs:
+            raise TLSIllegalParameterException("Server selected " "invalid signature " "algorithm")
+        if (serverKeyExchange.hashAlg, serverKeyExchange.signAlg) in (SignatureScheme.ed25519, SignatureScheme.ed448):
+            return KeyExchange._tls12_verify_eddsa_ske(
+                serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs
+            )
         if serverKeyExchange.signAlg == SignatureAlgorithm.ecdsa:
-            return KeyExchange._tls12_verify_ecdsa_SKE(serverKeyExchange,
-                                                       publicKey,
-                                                       clientRandom,
-                                                       serverRandom,
-                                                       validSigAlgs)
+            return KeyExchange._tls12_verify_ecdsa_SKE(
+                serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs
+            )
 
         elif serverKeyExchange.signAlg == SignatureAlgorithm.dsa:
-            return KeyExchange._tls12_verify_dsa_SKE(serverKeyExchange,
-                                                     publicKey,
-                                                     clientRandom,
-                                                     serverRandom,
-                                                     validSigAlgs)
+            return KeyExchange._tls12_verify_dsa_SKE(
+                serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs
+            )
 
-        schemeID = (serverKeyExchange.hashAlg,
-                    serverKeyExchange.signAlg)
+        schemeID = (serverKeyExchange.hashAlg, serverKeyExchange.signAlg)
         scheme = SignatureScheme.toRepr(schemeID)
         if scheme is not None:
             keyType = SignatureScheme.getKeyType(scheme)
@@ -310,15 +276,14 @@ class KeyExchange(object):
         else:
             if serverKeyExchange.signAlg != SignatureAlgorithm.rsa:
                 raise TLSInternalError("non-RSA sigs are not supported")
-            keyType = 'rsa'
-            padType = 'pkcs1'
+            keyType = "rsa"
+            padType = "pkcs1"
             saltLen = 0
             hashName = HashAlgorithm.toRepr(serverKeyExchange.hashAlg)
             if hashName is None:
-                msg = "Unknown hash ID: {0}"\
-                        .format(serverKeyExchange.hashAlg)
+                msg = "Unknown hash ID: {0}".format(serverKeyExchange.hashAlg)
                 raise TLSIllegalParameterException(msg)
-        assert keyType == 'rsa'
+        assert keyType == "rsa"
 
         hashBytes = serverKeyExchange.hash(clientRandom, serverRandom)
 
@@ -326,21 +291,18 @@ class KeyExchange(object):
         if not sigBytes:
             raise TLSIllegalParameterException("Empty signature")
 
-        logging.debug(f"sigBytes {sigBytes}")
-        logging.debug(f"hashBytes {hashBytes}")
+        logging.debug(f"clientRandom {clientRandom.hex()}")
+        logging.debug(f"serverRandom {serverRandom.hex()}")
+        logging.debug(f"sigBytes {sigBytes.hex()}")
+        logging.debug(f"hashBytes {hashBytes.hex()}")
         logging.debug(f"padType {padType}")
         logging.debug(f"hashName {hashName}")
         logging.debug(f"saltLen {saltLen}")
-        if not publicKey.verify(sigBytes, hashBytes,
-                                padding=padType,
-                                hashAlg=hashName,
-                                saltLen=saltLen):
-            raise TLSDecryptionFailed("Server Key Exchange signature "
-                                      "invalid")
+        if not publicKey.verify(sigBytes, hashBytes, padding=padType, hashAlg=hashName, saltLen=saltLen):
+            raise TLSDecryptionFailed("Server Key Exchange signature " "invalid")
 
     @staticmethod
-    def verifyServerKeyExchange(serverKeyExchange, publicKey, clientRandom,
-                                serverRandom, validSigAlgs):
+    def verifyServerKeyExchange(serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs):
         """Verify signature on the Server Key Exchange message
 
         the only acceptable signature algorithms are specified by validSigAlgs
@@ -354,24 +316,33 @@ class KeyExchange(object):
                 raise TLSIllegalParameterException("Empty signature")
 
             if not publicKey.verify(sigBytes, hashBytes):
-                raise TLSDecryptionFailed("Server Key Exchange signature "
-                                          "invalid")
+                raise TLSDecryptionFailed("Server Key Exchange signature " "invalid")
         else:
-            KeyExchange._tls12_verify_SKE(serverKeyExchange, publicKey,
-                                          clientRandom, serverRandom,
-                                          validSigAlgs)
+            KeyExchange._tls12_verify_SKE(serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs)
 
     @staticmethod
-    def calcVerifyBytes(version, handshakeHashes, signatureAlg,
-                        premasterSecret, clientRandom, serverRandom,
-                        prf_name = None, peer_tag=b'client', key_type="rsa"):
+    def calcVerifyBytes(
+        version,
+        handshakeHashes,
+        signatureAlg,
+        premasterSecret,
+        clientRandom,
+        serverRandom,
+        prf_name=None,
+        peer_tag=b"client",
+        key_type="rsa",
+    ):
         """Calculate signed bytes for Certificate Verify"""
         if version == (3, 0):
-            masterSecret = calc_key(version, premasterSecret,
-                                    0, b"master secret",
-                                    client_random=clientRandom,
-                                    server_random=serverRandom,
-                                    output_length=48)
+            masterSecret = calc_key(
+                version,
+                premasterSecret,
+                0,
+                b"master secret",
+                client_random=clientRandom,
+                server_random=serverRandom,
+                output_length=48,
+            )
             verifyBytes = handshakeHashes.digestSSL(masterSecret, b"")
         elif version in ((3, 1), (3, 2)):
             if key_type != "ecdsa":
@@ -379,15 +350,14 @@ class KeyExchange(object):
             else:
                 verifyBytes = handshakeHashes.digest("sha1")
         elif version == (3, 3):
-            if signatureAlg in (SignatureScheme.ed25519,
-                    SignatureScheme.ed448):
+            if signatureAlg in (SignatureScheme.ed25519, SignatureScheme.ed448):
                 hashName = "intrinsic"
                 padding = None
             elif signatureAlg[1] != SignatureAlgorithm.ecdsa:
                 scheme = SignatureScheme.toRepr(signatureAlg)
                 if scheme is None:
                     hashName = HashAlgorithm.toRepr(signatureAlg[0])
-                    padding = 'pkcs1'
+                    padding = "pkcs1"
                 else:
                     hashName = SignatureScheme.getHash(scheme)
                     padding = SignatureScheme.getPadding(scheme)
@@ -395,7 +365,7 @@ class KeyExchange(object):
                 padding = None
                 hashName = HashAlgorithm.toRepr(signatureAlg[0])
             verifyBytes = handshakeHashes.digest(hashName)
-            if padding == 'pkcs1':
+            if padding == "pkcs1":
                 verifyBytes = RSAKey.addPKCS1Prefix(verifyBytes, hashName)
         elif version == (3, 4):
             scheme = SignatureScheme.toRepr(signatureAlg)
@@ -405,11 +375,9 @@ class KeyExchange(object):
                 # handles negative test cases when we try to pass in
                 # schemes that are not supported in TLS1.3
                 hash_name = HashAlgorithm.toRepr(signatureAlg[0])
-            verifyBytes = bytearray(b'\x20' * 64 +
-                                    b'TLS 1.3, ' + peer_tag +
-                                    b' CertificateVerify' +
-                                    b'\x00') + \
-                          handshakeHashes.digest(prf_name)
+            verifyBytes = bytearray(
+                b"\x20" * 64 + b"TLS 1.3, " + peer_tag + b" CertificateVerify" + b"\x00"
+            ) + handshakeHashes.digest(prf_name)
             if hash_name != "intrinsic":
                 verifyBytes = secureHash(verifyBytes, hash_name)
         else:
@@ -417,9 +385,16 @@ class KeyExchange(object):
         return verifyBytes
 
     @staticmethod
-    def makeCertificateVerify(version, handshakeHashes, validSigAlgs,
-                              privateKey, certificateRequest, premasterSecret,
-                              clientRandom, serverRandom):
+    def makeCertificateVerify(
+        version,
+        handshakeHashes,
+        validSigAlgs,
+        privateKey,
+        certificateRequest,
+        premasterSecret,
+        clientRandom,
+        serverRandom,
+    ):
         """Create a Certificate Verify message
 
         :param version: protocol version in use
@@ -444,25 +419,26 @@ class KeyExchange(object):
             # if none acceptable, do a last resort:
             if signatureAlgorithm is None:
                 signatureAlgorithm = validSigAlgs[0]
-        verifyBytes = KeyExchange.calcVerifyBytes(version, handshakeHashes,
-                                                  signatureAlgorithm,
-                                                  premasterSecret,
-                                                  clientRandom,
-                                                  serverRandom,
-                                                  key_type=privateKey.key_type)
-        if signatureAlgorithm and signatureAlgorithm in (
-                SignatureScheme.ed25519, SignatureScheme.ed448):
+        verifyBytes = KeyExchange.calcVerifyBytes(
+            version,
+            handshakeHashes,
+            signatureAlgorithm,
+            premasterSecret,
+            clientRandom,
+            serverRandom,
+            key_type=privateKey.key_type,
+        )
+        if signatureAlgorithm and signatureAlgorithm in (SignatureScheme.ed25519, SignatureScheme.ed448):
             padding = None
             hashName = "intrinsic"
             saltLen = None
             sig_func = privateKey.hashAndSign
             ver_func = privateKey.hashAndVerify
-        elif signatureAlgorithm and \
-                signatureAlgorithm[1] == SignatureAlgorithm.ecdsa:
+        elif signatureAlgorithm and signatureAlgorithm[1] == SignatureAlgorithm.ecdsa:
             padding = None
             hashName = HashAlgorithm.toRepr(signatureAlgorithm[0])
             saltLen = None
-            verifyBytes = verifyBytes[:privateKey.private_key.curve.baselen]
+            verifyBytes = verifyBytes[: privateKey.private_key.curve.baselen]
             sig_func = privateKey.sign
             ver_func = privateKey.verify
         else:
@@ -472,21 +448,17 @@ class KeyExchange(object):
             hashName = None
             saltLen = 0
             if scheme is None:
-                padding = 'pkcs1'
+                padding = "pkcs1"
             else:
                 padding = SignatureScheme.getPadding(scheme)
-                if padding == 'pss':
+                if padding == "pss":
                     hashName = SignatureScheme.getHash(scheme)
                     saltLen = getattr(hashlib, hashName)().digest_size
             sig_func = privateKey.sign
             ver_func = privateKey.verify
 
-        signedBytes = sig_func(verifyBytes,
-                               padding,
-                               hashName,
-                               saltLen)
-        if not ver_func(signedBytes, verifyBytes, padding, hashName,
-                        saltLen):
+        signedBytes = sig_func(verifyBytes, padding, hashName, saltLen)
+        if not ver_func(signedBytes, verifyBytes, padding, hashName, saltLen):
             raise TLSInternalError("Certificate Verify signature invalid")
         certificateVerify = CertificateVerify(version)
         certificateVerify.create(signedBytes, signatureAlgorithm)
@@ -516,8 +488,7 @@ class RSAKeyExchange(KeyExchange):
     """
 
     def __init__(self, cipherSuite, clientHello, serverHello, privateKey):
-        super(RSAKeyExchange, self).__init__(cipherSuite, clientHello,
-                                             serverHello, privateKey)
+        super(RSAKeyExchange, self).__init__(cipherSuite, clientHello, serverHello, privateKey)
         self.encPremasterSecret = None
 
     def makeServerKeyExchange(self, sigHash=None):
@@ -526,8 +497,7 @@ class RSAKeyExchange(KeyExchange):
 
     def processClientKeyExchange(self, clientKeyExchange):
         """Decrypt client key exchange, return premaster secret"""
-        premasterSecret = self.privateKey.decrypt(\
-            clientKeyExchange.encryptedPreMasterSecret)
+        premasterSecret = self.privateKey.decrypt(clientKeyExchange.encryptedPreMasterSecret)
 
         # On decryption failure randomize premaster secret to avoid
         # Bleichenbacher's "million message" attack
@@ -539,15 +509,14 @@ class RSAKeyExchange(KeyExchange):
         else:
             versionCheck = (premasterSecret[0], premasterSecret[1])
             if versionCheck != self.clientHello.client_version:
-                #Tolerate buggy IE clients
+                # Tolerate buggy IE clients
                 if versionCheck != self.serverHello.server_version:
                     premasterSecret = randomPreMasterSecret
         return premasterSecret
 
-    def processServerKeyExchange(self, srvPublicKey,
-                                 serverKeyExchange):
+    def processServerKeyExchange(self, srvPublicKey, serverKeyExchange):
         """Generate premaster secret for server"""
-        del serverKeyExchange # not present in RSA key exchange
+        del serverKeyExchange  # not present in RSA key exchange
         premasterSecret = getRandomBytes(48)
         premasterSecret[0] = self.clientHello.client_version[0]
         premasterSecret[1] = self.clientHello.client_version[1]
@@ -569,11 +538,9 @@ class ADHKeyExchange(KeyExchange):
     FFDHE without signing serverKeyExchange useful for anonymous DH
     """
 
-    def __init__(self, cipherSuite, clientHello, serverHello,
-                 dhParams=None, dhGroups=None):
-        super(ADHKeyExchange, self).__init__(cipherSuite, clientHello,
-                                             serverHello)
-#pylint: enable = invalid-name
+    def __init__(self, cipherSuite, clientHello, serverHello, dhParams=None, dhGroups=None):
+        super(ADHKeyExchange, self).__init__(cipherSuite, clientHello, serverHello)
+        # pylint: enable = invalid-name
         self.dh_Xs = None
         self.dh_Yc = None
         if dhParams:
@@ -594,13 +561,11 @@ class ADHKeyExchange(KeyExchange):
             if commonGroup:
                 self.dh_g, self.dh_p = RFC7919_GROUPS[commonGroup - 256]
             elif getFirstMatching(ext.groups, range(256, 512)):
-                raise TLSInternalError("DHE key exchange attempted despite no "
-                                       "overlap between supported groups")
+                raise TLSInternalError("DHE key exchange attempted despite no " "overlap between supported groups")
 
         # for TLS < 1.3 we need special algorithm to select params (see above)
         # so do not pass in the group, if we selected one
-        kex = FFDHKeyExchange(None, self.serverHello.server_version,
-                              self.dh_g, self.dh_p)
+        kex = FFDHKeyExchange(None, self.serverHello.server_version, self.dh_g, self.dh_p)
         self.dh_Xs = kex.get_random_private_key()
         dh_Ys = kex.calc_public_value(self.dh_Xs)
 
@@ -614,8 +579,7 @@ class ADHKeyExchange(KeyExchange):
         """Use client provided parameters to establish premaster secret"""
         dh_Yc = clientKeyExchange.dh_Yc
 
-        kex = FFDHKeyExchange(None, self.serverHello.server_version,
-                              self.dh_g, self.dh_p)
+        kex = FFDHKeyExchange(None, self.serverHello.server_version, self.dh_g, self.dh_p)
         return kex.calc_shared_key(self.dh_Xs, dh_Yc)
 
     def processServerKeyExchange(self, srvPublicKey, serverKeyExchange):
@@ -628,8 +592,7 @@ class ADHKeyExchange(KeyExchange):
         dh_g = serverKeyExchange.dh_g
         dh_Ys = serverKeyExchange.dh_Ys
 
-        kex = FFDHKeyExchange(None, self.serverHello.server_version,
-                              dh_g, dh_p)
+        kex = FFDHKeyExchange(None, self.serverHello.server_version, dh_g, dh_p)
 
         dh_Xc = kex.get_random_private_key()
         self.dh_Yc = kex.calc_public_value(dh_Xc)
@@ -643,14 +606,13 @@ class ADHKeyExchange(KeyExchange):
 
 
 # the DHE_RSA part comes from IETF ciphersuite names, we want to keep it
-#pylint: disable = invalid-name
+# pylint: disable = invalid-name
 class DHE_RSAKeyExchange(AuthenticatedKeyExchange, ADHKeyExchange):
     """
     Handling of authenticated ephemeral Diffe-Hellman Key exchange.
     """
 
-    def __init__(self, cipherSuite, clientHello, serverHello, privateKey,
-                 dhParams=None, dhGroups=None):
+    def __init__(self, cipherSuite, clientHello, serverHello, privateKey, dhParams=None, dhGroups=None):
         """
         Create helper object for Diffie-Hellamn key exchange.
 
@@ -660,10 +622,8 @@ class DHE_RSAKeyExchange(AuthenticatedKeyExchange, ADHKeyExchange):
             a 2048-bit safe prime).
         :type dhParams: 2-element tuple of int
         """
-        super(DHE_RSAKeyExchange, self).__init__(cipherSuite, clientHello,
-                                                 serverHello, dhParams,
-                                                 dhGroups)
-#pylint: enable = invalid-name
+        super(DHE_RSAKeyExchange, self).__init__(cipherSuite, clientHello, serverHello, dhParams, dhGroups)
+        # pylint: enable = invalid-name
         self.privateKey = privateKey
 
 
@@ -674,10 +634,8 @@ class AECDHKeyExchange(KeyExchange):
     ECDHE without signing serverKeyExchange useful for anonymous ECDH
     """
 
-    def __init__(self, cipherSuite, clientHello, serverHello, acceptedCurves,
-                 defaultCurve=GroupName.secp256r1):
-        super(AECDHKeyExchange, self).__init__(cipherSuite, clientHello,
-                                               serverHello)
+    def __init__(self, cipherSuite, clientHello, serverHello, acceptedCurves, defaultCurve=GroupName.secp256r1):
+        super(AECDHKeyExchange, self).__init__(cipherSuite, clientHello, serverHello)
         self.ecdhXs = None
         self.acceptedCurves = acceptedCurves
         self.group_id = None
@@ -686,9 +644,8 @@ class AECDHKeyExchange(KeyExchange):
 
     def makeServerKeyExchange(self, sigHash=None):
         """Create AECDHE version of Server Key Exchange"""
-        #Get client supported groups
-        client_curves = self.clientHello.getExtension(
-                ExtensionType.supported_groups)
+        # Get client supported groups
+        client_curves = self.clientHello.getExtension(ExtensionType.supported_groups)
         if client_curves is None:
             # in case there is no extension, we can pick any curve,
             # use the configured one
@@ -699,7 +656,7 @@ class AECDHKeyExchange(KeyExchange):
         else:
             client_curves = client_curves.groups
 
-        #Pick first client preferred group we support
+        # Pick first client preferred group we support
         self.group_id = getFirstMatching(client_curves, self.acceptedCurves)
         if self.group_id is None:
             raise TLSInsufficientSecurity("No mutual groups")
@@ -710,9 +667,7 @@ class AECDHKeyExchange(KeyExchange):
 
         version = self.serverHello.server_version
         serverKeyExchange = ServerKeyExchange(self.cipherSuite, version)
-        serverKeyExchange.createECDH(ECCurveType.named_curve,
-                                     named_curve=self.group_id,
-                                     point=ecdhYs)
+        serverKeyExchange.createECDH(ECCurveType.named_curve, named_curve=self.group_id, point=ecdhYs)
         # No sign for anonymous ServerKeyExchange
         return serverKeyExchange
 
@@ -730,17 +685,17 @@ class AECDHKeyExchange(KeyExchange):
         """Process the server key exchange, return premaster secret"""
         del srvPublicKey
 
-        if serverKeyExchange.curve_type != ECCurveType.named_curve \
-            or serverKeyExchange.named_curve not in self.acceptedCurves:
-            raise TLSIllegalParameterException("Server picked curve we "
-                                               "didn't advertise")
+        if (
+            serverKeyExchange.curve_type != ECCurveType.named_curve
+            or serverKeyExchange.named_curve not in self.acceptedCurves
+        ):
+            raise TLSIllegalParameterException("Server picked curve we " "didn't advertise")
 
         ecdh_Ys = serverKeyExchange.ecdh_Ys
         if not ecdh_Ys:
             raise TLSDecodeError("Empty server key share")
 
-        kex = ECDHKeyExchange(serverKeyExchange.named_curve,
-                              self.serverHello.server_version)
+        kex = ECDHKeyExchange(serverKeyExchange.named_curve, self.serverHello.server_version)
         ecdhXc = kex.get_random_private_key()
         self.ecdhYc = kex.calc_public_value(ecdhXc)
         return kex.calc_shared_key(ecdhXc, ecdh_Ys)
@@ -754,28 +709,34 @@ class AECDHKeyExchange(KeyExchange):
 
 # The ECDHE_RSA part comes from the IETF names of ciphersuites, so we want to
 # keep it
-#pylint: disable = invalid-name
+# pylint: disable = invalid-name
 class ECDHE_RSAKeyExchange(AuthenticatedKeyExchange, AECDHKeyExchange):
     """Helper class for conducting ECDHE key exchange"""
 
-    def __init__(self, cipherSuite, clientHello, serverHello, privateKey,
-                 acceptedCurves, defaultCurve=GroupName.secp256r1):
-        super(ECDHE_RSAKeyExchange, self).__init__(cipherSuite, clientHello,
-                                                   serverHello,
-                                                   acceptedCurves,
-                                                   defaultCurve)
-#pylint: enable = invalid-name
+    def __init__(
+        self, cipherSuite, clientHello, serverHello, privateKey, acceptedCurves, defaultCurve=GroupName.secp256r1
+    ):
+        super(ECDHE_RSAKeyExchange, self).__init__(cipherSuite, clientHello, serverHello, acceptedCurves, defaultCurve)
+        # pylint: enable = invalid-name
         self.privateKey = privateKey
 
 
 class SRPKeyExchange(KeyExchange):
     """Helper class for conducting SRP key exchange"""
 
-    def __init__(self, cipherSuite, clientHello, serverHello, privateKey,
-                 verifierDB, srpUsername=None, password=None, settings=None):
+    def __init__(
+        self,
+        cipherSuite,
+        clientHello,
+        serverHello,
+        privateKey,
+        verifierDB,
+        srpUsername=None,
+        password=None,
+        settings=None,
+    ):
         """Link Key Exchange options with verifierDB for SRP"""
-        super(SRPKeyExchange, self).__init__(cipherSuite, clientHello,
-                                             serverHello, privateKey)
+        super(SRPKeyExchange, self).__init__(cipherSuite, clientHello, serverHello, privateKey)
         self.N = None
         self.v = None
         self.b = None
@@ -793,21 +754,20 @@ class SRPKeyExchange(KeyExchange):
     def makeServerKeyExchange(self, sigHash=None):
         """Create SRP version of Server Key Exchange"""
         srpUsername = bytes(self.clientHello.srp_username)
-        #Get parameters from username
+        # Get parameters from username
         try:
             entry = self.verifierDB[srpUsername]
         except KeyError:
             raise TLSUnknownPSKIdentity("Unknown identity")
         (self.N, g, s, self.v) = entry
 
-        #Calculate server's ephemeral DH values (b, B)
+        # Calculate server's ephemeral DH values (b, B)
         self.b = bytesToNumber(getRandomBytes(32))
         k = makeK(self.N, g)
         self.B = (powMod(g, self.b, self.N) + (k * self.v)) % self.N
 
-        #Create ServerKeyExchange, signing it if necessary
-        serverKeyExchange = ServerKeyExchange(self.cipherSuite,
-                                              self.serverHello.server_version)
+        # Create ServerKeyExchange, signing it if necessary
+        serverKeyExchange = ServerKeyExchange(self.cipherSuite, self.serverHello.server_version)
         serverKeyExchange.createSRP(self.N, g, s, self.B)
         if self.cipherSuite in CipherSuite.srpCertSuites:
             self.signServerKeyExchange(serverKeyExchange, sigHash)
@@ -819,16 +779,16 @@ class SRPKeyExchange(KeyExchange):
         if A % self.N == 0:
             raise TLSIllegalParameterException("Invalid SRP A value")
 
-        #Calculate u
+        # Calculate u
         u = makeU(self.N, A, self.B)
 
-        #Calculate premaster secret
+        # Calculate premaster secret
         S = powMod((A * powMod(self.v, u, self.N)) % self.N, self.b, self.N)
         return numberToByteArray(S)
 
     def processServerKeyExchange(self, srvPublicKey, serverKeyExchange):
         """Calculate premaster secret from ServerKeyExchange"""
-        del srvPublicKey # irrelevant for SRP
+        del srvPublicKey  # irrelevant for SRP
         N = serverKeyExchange.srp_N
         g = serverKeyExchange.srp_g
         s = serverKeyExchange.srp_s
@@ -837,28 +797,26 @@ class SRPKeyExchange(KeyExchange):
         if (g, N) not in goodGroupParameters:
             raise TLSInsufficientSecurity("Unknown group parameters")
         if numBits(N) < self.settings.minKeySize:
-            raise TLSInsufficientSecurity("N value is too small: {0}".\
-                                          format(numBits(N)))
+            raise TLSInsufficientSecurity("N value is too small: {0}".format(numBits(N)))
         if numBits(N) > self.settings.maxKeySize:
-            raise TLSInsufficientSecurity("N value is too large: {0}".\
-                                          format(numBits(N)))
+            raise TLSInsufficientSecurity("N value is too large: {0}".format(numBits(N)))
         if B % N == 0:
             raise TLSIllegalParameterException("Suspicious B value")
 
-        #Client ephemeral value
+        # Client ephemeral value
         a = bytesToNumber(getRandomBytes(32))
         self.A = powMod(g, a, N)
 
-        #Calculate client's static DH values (x, v)
+        # Calculate client's static DH values (x, v)
         x = makeX(s, self.srpUsername, self.password)
         v = powMod(g, x, N)
 
-        #Calculate u
+        # Calculate u
         u = makeU(N, self.A, B)
 
-        #Calculate premaster secret
+        # Calculate premaster secret
         k = makeK(N, g)
-        S = powMod((B - (k*v)) % N, a+(u*x), N)
+        S = powMod((B - (k * v)) % N, a + (u * x), N)
         return numberToByteArray(S)
 
     def makeClientKeyExchange(self):
@@ -905,10 +863,9 @@ class FFDHKeyExchange(RawDHKeyExchange):
     def __init__(self, group, version, generator=None, prime=None):
         super(FFDHKeyExchange, self).__init__(group, version)
         if prime and group:
-            raise ValueError("Can't set the RFC7919 group and custom params"
-                             " at the same time")
+            raise ValueError("Can't set the RFC7919 group and custom params" " at the same time")
         if group:
-            self.generator, self.prime = RFC7919_GROUPS[group-256]
+            self.generator, self.prime = RFC7919_GROUPS[group - 256]
         else:
             self.prime = prime
             self.generator = generator
@@ -947,8 +904,7 @@ class FFDHKeyExchange(RawDHKeyExchange):
             return peer_share
 
         if numBytes(self.prime) != len(peer_share):
-            raise TLSIllegalParameterException(
-                "Key share does not match FFDH prime")
+            raise TLSIllegalParameterException("Key share does not match FFDH prime")
         return bytesToNumber(peer_share)
 
     def calc_shared_key(self, private, peer_share):
@@ -1029,8 +985,7 @@ class ECDHKeyExchange(RawDHKeyExchange):
         else:
             curve = getCurveByName(GroupName.toRepr(self.group))
             try:
-                ecdhYc = decodeX962Point(peer_share,
-                                         curve)
+                ecdhYc = decodeX962Point(peer_share, curve)
             except (AssertionError, DecodeError):
                 raise TLSIllegalParameterException("Invalid ECC point")
 
