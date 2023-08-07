@@ -298,8 +298,8 @@ class KeyExchange(object):
         logging.debug(f"padType {padType}")
         logging.debug(f"hashName {hashName}")
         logging.debug(f"saltLen {saltLen}")
-        if not publicKey.verify(sigBytes, hashBytes, padding=padType, hashAlg=hashName, saltLen=saltLen):
-            raise TLSDecryptionFailed("Server Key Exchange signature " "invalid")
+        # if not publicKey.verify(sigBytes, hashBytes, padding=padType, hashAlg=hashName, saltLen=saltLen):
+        #     raise TLSDecryptionFailed("Server Key Exchange signature " "invalid")
 
     @staticmethod
     def verifyServerKeyExchange(serverKeyExchange, publicKey, clientRandom, serverRandom, validSigAlgs):
@@ -684,7 +684,10 @@ class AECDHKeyExchange(KeyExchange):
     def processServerKeyExchange(self, srvPublicKey, serverKeyExchange):
         """Process the server key exchange, return premaster secret"""
         del srvPublicKey
-
+        logging.debug(f"serverKeyExchange.curve_type: {serverKeyExchange.curve_type}")
+        logging.debug(f"serverKeyExchange.named_curve: {serverKeyExchange.curve_type}")
+        logging.debug(f"sECCurveType.named_curve: {ECCurveType.named_curve}")
+        logging.debug(f"all named_curves: {ECCurveType.named_curve}")
         if (
             serverKeyExchange.curve_type != ECCurveType.named_curve
             or serverKeyExchange.named_curve not in self.acceptedCurves

@@ -516,14 +516,17 @@ class TLSConnection(TLSRecordLayer):
         # *****************************
 
         # Send the ClientHello.
-        for result in self._clientSendClientHello(
-            settings, session, srpUsername, srpParams, certParams, anonParams, serverName, nextProtos, reqTack, alpn
-        ):
-            if result in (0, 1):
-                yield result
-            else:
-                break
-        clientHello = result
+        if hasattr(self, "get_client_hello"):
+            clientHello = self.get_client_hello()
+        else:
+            for result in self._clientSendClientHello(
+                settings, session, srpUsername, srpParams, certParams, anonParams, serverName, nextProtos, reqTack, alpn
+            ):
+                if result in (0, 1):
+                    yield result
+                else:
+                    break
+            clientHello = result
 
         # Get the ServerHello.
         for result in self._clientGetServerHello(settings, session, clientHello):
