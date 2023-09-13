@@ -2,7 +2,7 @@
 #
 # See the LICENSE file for legal information regarding use of this file.
 """Methods for dealing with ECC points"""
-
+import logging
 from .codec import Parser, Writer, DecodeError
 from .cryptomath import bytesToNumber, numberToByteArray, numBytes
 from .compat import ecdsaAllCurves
@@ -16,8 +16,16 @@ def decodeX962Point(data, curve=ecdsa.NIST256p):
     if encFormat != 4:
         raise DecodeError("Not an uncompressed point encoding")
     bytelength = getPointByteSize(curve)
-    xCoord = bytesToNumber(parser.getFixBytes(bytelength))
-    yCoord = bytesToNumber(parser.getFixBytes(bytelength))
+    x_bytes = parser.getFixBytes(bytelength)
+    xCoord = bytesToNumber(x_bytes)
+    y_bytes = parser.getFixBytes(bytelength)
+    yCoord = bytesToNumber(y_bytes)
+    logging.debug(f"x bytes: {x_bytes.hex()}")
+    logging.debug(f"y bytes: {y_bytes.hex()}")
+    logging.debug(f"data: {data.hex()}")
+    logging.debug(f"bytelength: {bytelength}")
+    logging.debug(f"xCoord: {xCoord}")
+    logging.debug(f"yCoord: {yCoord}")
     if parser.getRemainingLength():
         raise DecodeError("Invalid length of point encoding for curve")
     return ecdsa.ellipticcurve.Point(curve.curve, xCoord, yCoord)
@@ -68,4 +76,6 @@ def getPointByteSize(point):
             return curveMap[point.curve()]
         else:
             return curveMap[point.curve]
+    if point is None:
+        return curveMap[ecdsa.NIST256p.curve]
     raise ValueError("Parameter must be a curve or point on curve")
