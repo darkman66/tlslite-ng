@@ -987,11 +987,21 @@ class ECDHKeyExchange(RawDHKeyExchange):
             return S
         else:
             curve = getCurveByName(GroupName.toRepr(self.group))
+            print('c'*20, curve)
+            print('p'*20, private)
+
             try:
                 ecdhYc = decodeX962Point(peer_share, curve)
             except (AssertionError, DecodeError):
                 raise TLSIllegalParameterException("Invalid ECC point")
-
             S = ecdhYc * private
+            # try:
+            #     try:
+            #         ecdhYc = decodeX962Point(peer_share, curve)
+            #         S = ecdhYc * private
+            #     except (AssertionError, DecodeError):
+            #         raise TLSIllegalParameterException("Invalid ECC point")
+            # except TypeError:
+            #     S = private
 
             return numberToByteArray(S.x(), getPointByteSize(ecdhYc))
