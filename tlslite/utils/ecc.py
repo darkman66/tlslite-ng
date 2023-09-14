@@ -9,6 +9,30 @@ from .compat import ecdsaAllCurves
 import ecdsa
 
 
+old_init = ecdsa.ellipticcurve.Point.__init__
+
+
+def new_init(self, curve, x, y, order=None):
+    try:
+        old_init(self, curve, x, y, order)
+    except AssertionError:
+        if curve and curve.cofactor() != 1 and order:
+            assert self * order == INFINITY
+
+
+# class MyPoint(ecdsa.ellipticcurve.Point):
+
+#     def __init__(self, curve, x, y, order=None):
+#         """curve, x, y, order; order (optional) is the order of this point."""
+#         try:
+#             super().__init__(curve, x, y, order)
+#         except AssertionError:
+#             if curve and curve.cofactor() != 1 and order:
+#                 assert self * order == ecdsa.ellipticcurve.INFINITY
+
+ecdsa.ellipticcurve.Point.__init__ = new_init
+
+
 def decodeX962Point(data, curve=ecdsa.NIST256p):
     """Decode a point from a X9.62 encoding"""
     parser = Parser(data)
@@ -40,38 +64,44 @@ def encodeX962Point(point):
     writer.bytes += numberToByteArray(point.y(), bytelength)
     return writer.bytes
 
+
 def getCurveByName(curveName):
     """Return curve identified by curveName"""
-    curveMap = {'secp256r1':ecdsa.NIST256p,
-                'secp384r1':ecdsa.NIST384p,
-                'secp521r1':ecdsa.NIST521p,
-                'secp256k1':ecdsa.SECP256k1,
-                'brainpoolP256r1': ecdsa.BRAINPOOLP256r1,
-                'brainpoolP384r1': ecdsa.BRAINPOOLP384r1,
-                'brainpoolP512r1': ecdsa.BRAINPOOLP512r1}
+    curveMap = {
+        "secp256r1": ecdsa.NIST256p,
+        "secp384r1": ecdsa.NIST384p,
+        "secp521r1": ecdsa.NIST521p,
+        "secp256k1": ecdsa.SECP256k1,
+        "brainpoolP256r1": ecdsa.BRAINPOOLP256r1,
+        "brainpoolP384r1": ecdsa.BRAINPOOLP384r1,
+        "brainpoolP512r1": ecdsa.BRAINPOOLP512r1,
+    }
     if ecdsaAllCurves:
-        curveMap['secp224r1'] = ecdsa.NIST224p
-        curveMap['secp192r1'] = ecdsa.NIST192p
+        curveMap["secp224r1"] = ecdsa.NIST224p
+        curveMap["secp192r1"] = ecdsa.NIST192p
 
     if curveName in curveMap:
         return curveMap[curveName]
     else:
         raise ValueError("Curve of name '{0}' unknown".format(curveName))
 
+
 def getPointByteSize(point):
     """Convert the point or curve bit size to bytes"""
-    curveMap = {ecdsa.NIST256p.curve: 256//8,
-                ecdsa.NIST384p.curve: 384//8,
-                ecdsa.NIST521p.curve: (521+7)//8,
-                ecdsa.SECP256k1.curve: 256//8,
-                ecdsa.BRAINPOOLP256r1.curve: 256//8,
-                ecdsa.BRAINPOOLP384r1.curve: 384//8,
-                ecdsa.BRAINPOOLP512r1.curve: 512//8}
+    curveMap = {
+        ecdsa.NIST256p.curve: 256 // 8,
+        ecdsa.NIST384p.curve: 384 // 8,
+        ecdsa.NIST521p.curve: (521 + 7) // 8,
+        ecdsa.SECP256k1.curve: 256 // 8,
+        ecdsa.BRAINPOOLP256r1.curve: 256 // 8,
+        ecdsa.BRAINPOOLP384r1.curve: 384 // 8,
+        ecdsa.BRAINPOOLP512r1.curve: 512 // 8,
+    }
     if ecdsaAllCurves:
-        curveMap[ecdsa.NIST224p.curve] = 224//8
-        curveMap[ecdsa.NIST192p.curve] = 192//8
+        curveMap[ecdsa.NIST224p.curve] = 224 // 8
+        curveMap[ecdsa.NIST192p.curve] = 192 // 8
 
-    if hasattr(point, 'curve'):
+    if hasattr(point, "curve"):
         if callable(point.curve):
             return curveMap[point.curve()]
         else:
