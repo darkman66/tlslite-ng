@@ -1825,6 +1825,7 @@ class TLSConnection(TLSRecordLayer):
                 server_random=serverRandom,
                 output_length=48,
             )
+        self.master_secret = masterSecret
         self._calcPendingStates(cipherSuite, masterSecret, clientRandom, serverRandom, cipherImplementations)
 
         # Exchange ChangeCipherSpec and Finished messages
@@ -1832,8 +1833,9 @@ class TLSConnection(TLSRecordLayer):
             yield result
         self.sock.flush()
         self.sock.buffer_writes = False
-        for result in self._getFinished(masterSecret, cipherSuite, nextProto=nextProto):
-            yield result
+        # TODO: keep in separate package
+        # for result in self._getFinished(masterSecret, cipherSuite, nextProto=nextProto):
+        #     yield result
         yield masterSecret
 
     def _check_certchain_with_settings(self, cert_chain, settings):
