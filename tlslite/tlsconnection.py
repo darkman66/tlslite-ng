@@ -1683,6 +1683,9 @@ class TLSConnection(TLSRecordLayer):
                 else:
                     break
             publicKey, serverCertChain, tackExt = result
+            # print('p1'*10, publicKey)
+            # print('p1'*10, dir(publicKey))
+            # print('p1'*10, publicKey.write())
 
             # Check the server's signature, if the server chose an authenticated
             # PFS-enabled ciphersuite
@@ -1774,7 +1777,7 @@ class TLSConnection(TLSRecordLayer):
         # hashes as the Certificate Verify calculation so we need to
         # make a copy of it
         self._certificate_verify_handshake_hash = self._handshake_hash.copy()
-
+        logging.debug(f"client certificate: {clientCertChain}")
         # if client auth was requested and we have a private key, send a
         # CertificateVerify
         if certificateRequest and privateKey:
@@ -1825,7 +1828,7 @@ class TLSConnection(TLSRecordLayer):
                 server_random=serverRandom,
                 output_length=48,
             )
-        self.master_secret = masterSecret
+        self.master_secret_clc = masterSecret
         self._calcPendingStates(cipherSuite, masterSecret, clientRandom, serverRandom, cipherImplementations)
 
         # Exchange ChangeCipherSpec and Finished messages
@@ -4125,6 +4128,7 @@ class TLSConnection(TLSRecordLayer):
 
         # Send Finished message under new state
         finished = Finished(self.version).create(verifyData)
+        self.finished_data = finished
         for result in self._sendMsg(finished):
             yield result
         self.sock.flush()
