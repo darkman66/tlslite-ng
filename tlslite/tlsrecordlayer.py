@@ -925,6 +925,7 @@ class TLSRecordLayer(object):
                 return
 
         buf = msg.write()
+        print('buf-'*10, buf)
         contentType = msg.contentType
         #Update handshake hashes
         if update_hashes and contentType == ContentType.handshake:

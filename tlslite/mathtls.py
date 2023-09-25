@@ -878,6 +878,7 @@ def calc_key(version, secret, cipher_suite, label, handshake_hashes=None,
 
     # TLS1.2 calculations.
     else:
+        print('1.2-'*10, cipher_suite, label, CipherSuite.sha384PrfSuites)
         assert version == (3, 3)
         if cipher_suite in CipherSuite.sha384PrfSuites:
             func = PRF_1_2_SHA384
@@ -891,9 +892,11 @@ def calc_key(version, secret, cipher_suite, label, handshake_hashes=None,
         else:
             # Same as above, just using sha256
             func = PRF_1_2
+            print('l'*20)
             if label in [b"extended master secret", b"server finished",
                     b"client finished"]:
                 seed = handshake_hashes.digest('sha256')
+                print('seed:', seed)
             else:
                 assert label in [b"key expansion", b"master secret"]
 
@@ -902,6 +905,7 @@ def calc_key(version, secret, cipher_suite, label, handshake_hashes=None,
         seed = server_random + client_random
     if label == b"master secret":
         seed = client_random + server_random
+    print("====> ", client_random,":", server_random, func)
 
     if func == PRF_SSL:
         return func(secret, seed, output_length)

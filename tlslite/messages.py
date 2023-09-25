@@ -1890,7 +1890,7 @@ class CertificateVerify(HandshakeMsg):
         return self.postWrite(writer)
 
 
-class ChangeCipherSpec(object):
+class ChangeCipherSpec:
     def __init__(self):
         self.contentType = ContentType.change_cipher_spec
         self.type = 1

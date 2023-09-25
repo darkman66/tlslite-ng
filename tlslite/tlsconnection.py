@@ -590,6 +590,7 @@ class TLSConnection(TLSRecordLayer):
 
         if serverHello.getExtension(ExtensionType.extended_master_secret):
             self.extendedMasterSecret = True
+        self.extendedMasterSecret = True
 
         # If the server elected to resume the session, it is handled here.
         for result in self._clientResume(
@@ -1192,6 +1193,7 @@ class TLSConnection(TLSRecordLayer):
 
     def _clientTLS13Handshake(self, settings, session, clientHello, clientCertChain, privateKey, serverHello):
         """Perform TLS 1.3 handshake as a client."""
+        print('_clientTLS13Handshake-'*5)
         prfName, prf_size = self._getPRFParams(serverHello.cipher_suite)
 
         # we have client and server hello in TLS 1.3 so we have the necessary
@@ -1695,7 +1697,7 @@ class TLSConnection(TLSRecordLayer):
                 # try:
                 logging.debug(f"serverKeyExchange: {serverKeyExchange}")
                 logging.debug(f"publicKey: {publicKey}")
-                logging.debug(f"clientRandom: {clientRandom}")
+                logging.debug(f"clientRandom: {clientRandom.hex()}")
                 logging.debug(f"serverRandom: {serverRandom}")
                 logging.debug(f"valid_sig_algs: {valid_sig_algs}")
                 KeyExchange.verifyServerKeyExchange(
@@ -1768,6 +1770,8 @@ class TLSConnection(TLSRecordLayer):
                 yield result
 
         clientKeyExchange = keyExchange.makeClientKeyExchange()
+        self.client_key_exchange_obj = keyExchange
+        self.client_key_exchange = clientKeyExchange
 
         # Send ClientKeyExchange
         for result in self._sendMsg(clientKeyExchange):
@@ -1804,12 +1808,14 @@ class TLSConnection(TLSRecordLayer):
     def _clientFinished(
         self, premasterSecret, clientRandom, serverRandom, cipherSuite, cipherImplementations, nextProto, settings
     ):
+        print('a1'*10)
         if self.extendedMasterSecret:
             cvhh = self._certificate_verify_handshake_hash
             # in case of session resumption, or when the handshake doesn't
             # use the certificate authentication, the hashes are the same
             if not cvhh:
                 cvhh = self._handshake_hash
+            print('a2'*10)
             masterSecret = calc_key(
                 self.version,
                 premasterSecret,
@@ -4097,7 +4103,8 @@ class TLSConnection(TLSRecordLayer):
         # send the CCS and Finished in single TCP packet
         self.sock.buffer_writes = True
         # Send ChangeCipherSpec
-        for result in self._sendMsg(ChangeCipherSpec()):
+        self.change_cipher_spec = ChangeCipherSpec()
+        for result in self._sendMsg(self.change_cipher_spec):
             yield result
 
         # Switch to pending write state
