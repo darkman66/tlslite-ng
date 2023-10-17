@@ -527,7 +527,7 @@ class TLSConnection(TLSRecordLayer):
                 else:
                     break
             clientHello = result
-
+            self.client_send_hello_pkt = clientHello
         # Get the ServerHello.
         for result in self._clientGetServerHello(settings, session, clientHello):
             if result in (0, 1):
@@ -1774,8 +1774,11 @@ class TLSConnection(TLSRecordLayer):
         self.client_key_exchange = clientKeyExchange
 
         # Send ClientKeyExchange
+        print("da" * 10, self.sock.socket.in_data)
         for result in self._sendMsg(clientKeyExchange):
             yield result
+        self.sock.flush()
+        self.client_exchange_pkt = self.sock.socket.in_data
 
         # the Extended Master Secret calculation uses the same handshake
         # hashes as the Certificate Verify calculation so we need to
@@ -1808,7 +1811,8 @@ class TLSConnection(TLSRecordLayer):
     def _clientFinished(
         self, premasterSecret, clientRandom, serverRandom, cipherSuite, cipherImplementations, nextProto, settings
     ):
-        print('a1'*10)
+        self.sock.socket.in_data = b""
+
         if self.extendedMasterSecret:
             cvhh = self._certificate_verify_handshake_hash
             # in case of session resumption, or when the handshake doesn't
@@ -1840,7 +1844,9 @@ class TLSConnection(TLSRecordLayer):
         # Exchange ChangeCipherSpec and Finished messages
         for result in self._sendFinished(masterSecret, cipherSuite, nextProto, settings=settings):
             yield result
+
         self.sock.flush()
+        self.client_finished_pkt = self.sock.socket.in_data
         self.sock.buffer_writes = False
         # TODO: keep in separate package
         # for result in self._getFinished(masterSecret, cipherSuite, nextProto=nextProto):
